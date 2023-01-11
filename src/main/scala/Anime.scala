@@ -1,7 +1,5 @@
-import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
 
-import java.util
 import scala.Console.println
 
 object anime_stats extends App {
@@ -10,9 +8,9 @@ object anime_stats extends App {
 
   // Récupération des données
   val DATA_PATH = "anime.csv"
-  val caract_rdd = sc.textFile(DATA_PATH).map(row => row.split(','))
+  val caract_rdd = sc.textFile(DATA_PATH).map(row => row.replace(';', '!').split(','))
   val headerRow = caract_rdd.first()
-  val caract_rdd_clean = caract_rdd.filter(row => row(0) != headerRow(0))
+  var caract_rdd_clean = caract_rdd.filter(row => row(0) != headerRow(0))
 
   val col_anime_id = headerRow.indexOf("MAL_ID")
   val col_name = headerRow.indexOf("Name")
@@ -39,26 +37,23 @@ object anime_stats extends App {
   val col_on_hold = headerRow.indexOf("On-Hold")
   val col_dropped = headerRow.indexOf("Dropped")
   val col_plan_to_watch = headerRow.indexOf("Plan to Watch")
-  val col_score_amount = new Array[Int](11);
-  for (i <- 1 to 10) {
-    col_score_amount(i) = headerRow.indexOf("Score-" + i)
+  val col_score_amount = new Array[Int](10);
+  for (i <- 0 to 9) {
+    col_score_amount(i) = headerRow.indexOf("Score-" + i+1)
   }
 
   // Calcul de la médiane
-
   val mediane = caract_rdd_clean.map(
     anime => (
       anime(col_anime_id),
-      med(col_score_amount.slice(1, 10).map(i_col => anime(i_col).toInt)))
-  ).groupByKey().map(stat => (stat._1, stat._2.map(nb => nb.toFloat).sum / stat._2.size, stat._2.size)).
-    filter(stat => stat._3 >= 4).
-    sortBy(stat => stat._2, ascending = false).
-    take(10);
+      med(col_score_amount.map(i_col => anime(i_col).toFloat))
+    )
+  )
 
-  def med(amounts: Array[Int]): Int = {
+  def med(amounts: Array[Float]): Int = {
     val half_amount = amounts.sum / 2
 
-    var current_total_amount = 0
+    var current_total_amount = 0.0
     for (i <- 0 to 9) {
       current_total_amount += amounts(i)
       if (current_total_amount > half_amount) {
@@ -67,7 +62,4 @@ object anime_stats extends App {
     }
     return 0
   };
-
-  println(mediane)
-
 }
