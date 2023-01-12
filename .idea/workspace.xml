@@ -5,9 +5,10 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="28ee512b-5df3-49a9-be7a-b98d69185802" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/anime.csv" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/scala/Anime.scala" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/scala/Anime.scala" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/scala-2.13/classes/anime_stats$.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/scala-2.13/classes/anime_stats$.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/scala-2.13/classes/anime_stats.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/scala-2.13/classes/anime_stats.class" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -42,7 +43,7 @@
     "RunOnceActivity.OpenProjectViewOnStart": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "last_opened_file_path": "C:/Users/Jean-Loup/IdeaProjects/TP-PUBG-Moll-Lemaitre"
+    "last_opened_file_path": "C:/Users/Jean-Loup/IdeaProjects/Projet_DMB"
   }
 }]]></component>
   <component name="RunManager" selected="Application.anime_stats">
@@ -100,5 +101,15 @@
   <component name="VcsManagerConfiguration">
     <MESSAGE value="Initial commit" />
     <option name="LAST_COMMIT_MESSAGE" value="Initial commit" />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <breakpoint enabled="true" type="java-exception">
+          <properties class="java.lang.NumberFormatException" package="java.lang" />
+          <option name="timeStamp" value="5" />
+        </breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
   </component>
 </project>

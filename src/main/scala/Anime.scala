@@ -47,9 +47,9 @@ object anime_stats extends App {
     anime => (
       anime(col_anime_id),
       anime(col_name),
-      anime(col_rating).toFloat,
+      str_to_float(anime(col_score)),
       med(col_score_amount.map(
-        i_col => anime(i_col).toFloat
+        i_col => str_to_float(anime(i_col).trim())
       ))
     )
   )
@@ -59,14 +59,17 @@ object anime_stats extends App {
 
 
   // Utilisation
+  /*
   println("Please enter the id of an anime :")
   val anime_id_input = scala.io.StdIn.readLine()
   println("The median for this anime is:")
   println(rdd_score_median.filter(row => row._1 == anime_id_input).first()._4)
+  */
 
   // On prend les 10 meilleurs moyennes (TODO? pour les animes notés au moins 1000 fois)
   val best_med = rdd_score_median.sortBy(
-    (row=>row._3)
+    (row=>row._3),
+    false
   ).take(10)
 
   println("Top 10 best scores:")
@@ -113,5 +116,14 @@ object anime_stats extends App {
     }
 
     return res
+  }
+
+  def str_to_float(s: String): Float = {
+    try{
+      return s.toFloat
+    }
+    catch {
+      case e:NumberFormatException => 0
+    }
   }
 }
