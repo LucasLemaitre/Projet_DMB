@@ -1,6 +1,3 @@
-import anime_stats.tabgenres
-import org.apache.spark.graphx.Edge
-import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
 
 import scala.Console.println
@@ -47,38 +44,36 @@ object anime_stats extends App {
     col_score_amount(i) = headerRow.indexOf("Score-" + (i + 1))
   }
 
+
+
   // Calcul de la médiane
   val rdd_score_median = caract_rdd_clean.map(
     anime => (
-      anime(col_anime_id),
-      anime(col_name),
-      str_to_float(anime(col_score)),
-      med(col_score_amount.map(
-        i_col => str_to_float(anime(i_col).trim())
-      ))
+      anime(col_anime_id),  //1
+      anime(col_name),  //2
+      str_to_float(anime(col_score)), //3
+      med(col_score_amount.map( i_col => str_to_float(anime(i_col).trim()) )),  //4 //Score médian
+      str_to_float(anime(col_watching)),  //5
+      str_to_float(anime(col_completed)), //6
+      str_to_float(anime(col_on_hold)), //7
+      str_to_float(anime(col_dropped)), //8
+      str_to_float(anime(col_plan_to_watch))  //9
     )
   )
 
 
-
-
-
-  // Utilisation
-  /*
-  println("Please enter the id of an anime :")
-  val anime_id_input = scala.io.StdIn.readLine()
-  println("The median for this anime is:")
-  println(rdd_score_median.filter(row => row._1 == anime_id_input).first()._4)
-  */
-
-  // On prend les 10 meilleurs moyennes (TODO? pour les animes notés au moins 1000 fois)
-  val best_med = rdd_score_median.sortBy(
+  // On prend les 10 meilleurs moyennes pour les animés qui ont été visionnés intégralement par au moins 10 utilisateurs.
+  val best_med = rdd_score_median.filter(row => row._6 > 10).sortBy(
     (row => row._3),
     false
   ).take(10)
 
   println("Top 10 best scores:")
-  println(best_med.mkString("\n"))
+  best_med.foreach(row => {
+    val sum_p = row._5 + row._6 + row._7 + row._9 // Somme des facteurs "positifs"
+    val ns = row._4 * sum_p / (sum_p + row._8)
+    println("anime: " + row._2 + " | score: " + row._3 + " | median: " + row._4 + " | new score: " + ns)
+  })
 
 
 
@@ -177,6 +172,7 @@ object anime_stats extends App {
     }
     return 0
   };
+
 
   //This function takes a String s and replace every substring of the form: "_,_,_" with a new one of the form: _/_/_
   def deal_with_quotes(s: String): String = {
