@@ -1,6 +1,11 @@
+import anime_stats.tabgenres
+import org.apache.spark.graphx.Edge
+import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
 
+import java.util
 import scala.Console.println
+import scala.collection.mutable
 
 object anime_stats extends App {
   val sparkConf = new SparkConf().setAppName("graphXTP").setMaster("local[1]")
@@ -39,7 +44,7 @@ object anime_stats extends App {
   val col_plan_to_watch = headerRow.indexOf("Plan to Watch")
   val col_score_amount = new Array[Int](10);
   for (i <- 0 to 9) {
-    col_score_amount(i) = headerRow.indexOf("Score-" + (i+1))
+    col_score_amount(i) = headerRow.indexOf("Score-" + (i + 1))
   }
 
   // Calcul de la médiane
@@ -68,15 +73,12 @@ object anime_stats extends App {
 
   // On prend les 10 meilleurs moyennes (TODO? pour les animes notés au moins 1000 fois)
   val best_med = rdd_score_median.sortBy(
-    (row=>row._3),
+    (row => row._3),
     false
   ).take(10)
 
   println("Top 10 best scores:")
   println(best_med.mkString("\n"))
-
-
-
 
 
   // This function takes for an anime an array A st A(i) is the amount of people who put a score of (i+1) for this anime.
@@ -102,14 +104,14 @@ object anime_stats extends App {
 
     var substr = ""
     var i_end_substr = -1
-    while(i_next_quote != -1){
+    while (i_next_quote != -1) {
       //We suppose quotes come in pairs ("_")
-      substr = res.substring(i_next_quote+1)
+      substr = res.substring(i_next_quote + 1)
       i_end_substr = substr.indexOf("\"")
-      substr = substr.substring(0,i_end_substr)
+      substr = substr.substring(0, i_end_substr)
 
-      res = res.substring(0,i_next_quote) +
-        substr.replace(",","/") +
+      res = res.substring(0, i_next_quote) +
+        substr.replace(",", "/") +
         res.substring(i_next_quote + substr.length + 2) // +2 for the quotes
 
       i_next_quote = res.indexOf("\"")
@@ -119,11 +121,120 @@ object anime_stats extends App {
   }
 
   def str_to_float(s: String): Float = {
-    try{
+    try {
       return s.toFloat
     }
     catch {
-      case e:NumberFormatException => 0
+      case e: NumberFormatException => 0
     }
   }
+
+  /*   Quel est le genre le plus populaire ?   */
+
+  // Récupère tous les genres
+  var genres = Set.empty[String];
+  val tabgenres = caract_rdd_clean.map(row => (row(col_anime_id), row(col_score), row(col_genres).split("/ "), row(col_watching), row(col_completed), row(col_on_hold), row(col_dropped)));
+  tabgenres.foreach(list => list._3.foreach(genre => genres+=genre))
+  genres-="Unknown"
+
+  case class NoteGenre(genre: String, nbAnime: Int, nbVue: Int, scoreMoyen: Double)
+
+  var noteGenreRDD = sc.parallelize(Seq(NoteGenre("null", 0, 0, 0)));
+
+  var nbAnime = 0;
+  var scoreAdditionne = 0.0;
+  var nbNote = 0;
+  var nbVue = 0;
+
+  // Récupère les informations voulues pour chaque genre
+  genres.foreach(genreToAdd => {
+    nbAnime = 0;
+    scoreAdditionne = 0.0;
+    nbNote = 0;
+    nbVue = 0;
+    tabgenres.foreach(row => row._3.foreach(genre => {
+      if (genreToAdd.equals(genre)) {
+        nbAnime += 1;
+        nbVue += row._4.toInt + row._5.toInt + row._6.toInt + row._7.toInt;
+        if(!row._2.equals("Unknown")) {
+          scoreAdditionne += row._2.toFloat;
+          nbNote+=1;
+        }
+      }
+    }))
+    noteGenreRDD = noteGenreRDD.union(sc.parallelize(Seq(NoteGenre(genreToAdd, nbAnime, nbVue/nbAnime, scoreAdditionne / nbNote))))
+  });
+
+  val bestGenreByNote = noteGenreRDD.sortBy(genre => genre.scoreMoyen, false).take(10);
+  println("Meilleur genre par note (Nom, Nombre d'animés, Nombre de vues moyen, Note moyenne) :\n" + bestGenreByNote.mkString("\n"));
+
+  val bestGenreByNumberOfAnime = noteGenreRDD.sortBy(genre => genre.nbAnime, false).take(10);
+  println("Meilleur genre par nombre d'animé (Nom, Nombre d'animés, Nombre de vues moyen, Note moyenne) :\n" + bestGenreByNumberOfAnime.mkString("\n"));
+  val meilleurNombreAnime = bestGenreByNumberOfAnime(0).nbAnime
+
+  val bestGenreByAverageOfNumberOfVue = noteGenreRDD.sortBy(genre => genre.nbVue, false).take(10);
+  println("Meilleur genre par nombre de vue moyen (Nom, Nombre d'animés, Nombre de vues moyen, Note moyenne) :\n" + bestGenreByAverageOfNumberOfVue.mkString("\n"));
+  val meilleurNombreVueMoyen = bestGenreByAverageOfNumberOfVue(0).nbVue
+
+  // Calcul d'un score global qui prend en compte les trois variables précédentes
+  var scoreGlobalGenreRDD = noteGenreRDD.map(genre => {
+    (genre.genre,
+      genre.nbAnime.toFloat / meilleurNombreAnime * 10 +
+      genre.nbVue.toFloat / meilleurNombreVueMoyen * 10 +
+      genre.scoreMoyen.toFloat)
+  })
+
+  val meilleurScoreGlobal = scoreGlobalGenreRDD.sortBy(genre => genre._2, false).take(10);
+  println("Meilleur genre par score global :\n" + meilleurScoreGlobal.mkString("\n"));
+  // Le genre Comedy obtient le meilleur score
+
+  // Filtre les animés qui sont associés au genre Comedy
+  var tabgenresComedy = tabgenres.filter(row => row._3.indexOf("Comedy") != -1)
+
+  var noteGenreComboComedyRDD = sc.parallelize(Seq(NoteGenre("null", 0, 0, 0)));
+
+  // Récupère les informations voulues pour chaque genre associé au genre Comedy
+  genres.foreach(genreToAdd => {
+    nbAnime = 0;
+    scoreAdditionne = 0.0;
+    nbNote = 0;
+    nbVue = 0;
+    tabgenresComedy.foreach(row => row._3.foreach(genre => {
+      if (genreToAdd.equals(genre)) {
+        nbAnime += 1;
+        nbVue += row._4.toInt + row._5.toInt + row._6.toInt + row._7.toInt;
+        if (!row._2.equals("Unknown")) {
+          scoreAdditionne += row._2.toFloat;
+          nbNote += 1;
+        }
+      }
+    }))
+    if(nbAnime != 0) {
+      noteGenreComboComedyRDD = noteGenreComboComedyRDD.union(sc.parallelize(Seq(NoteGenre(genreToAdd, nbAnime, nbVue / nbAnime, scoreAdditionne / nbNote))))
+    }
+  });
+
+  noteGenreComboComedyRDD = noteGenreComboComedyRDD.filter(genre => genre.genre != "Comedy" && !genre.scoreMoyen.isNaN);
+
+  val bestGenreByNoteComboComedy = noteGenreComboComedyRDD.sortBy(genre => genre.scoreMoyen, false).take(10);
+  println("Meilleur genre avec le genre Comedy par note (Nom, Nombre d'animés, Nombre de vues moyen, Note moyenne) :\n" + bestGenreByNoteComboComedy.mkString("\n"));
+
+  val bestGenreByNumberOfAnimeComboComedy = noteGenreComboComedyRDD.sortBy(genre => genre.nbAnime, false).take(10);
+  println("Meilleur genre avec le genre Comedy par nombre d'animé (Nom, Nombre d'animés, Nombre de vues moyen, Note moyenne) :\n" + bestGenreByNumberOfAnimeComboComedy.mkString("\n"));
+  val meilleurNombreAnimeComboComedy = bestGenreByNumberOfAnimeComboComedy(0).nbAnime
+
+  val bestGenreByAverageOfNumberOfVueComboComedy = noteGenreComboComedyRDD.sortBy(genre => genre.nbVue, false).take(10);
+  println("Meilleur genre avec le genre Comedy par nombre de vue moyen (Nom, Nombre d'animés, Nombre de vues moyen, Note moyenne) :\n" + bestGenreByAverageOfNumberOfVueComboComedy.mkString("\n"));
+  val meilleurNombreVueMoyenComboComedy = bestGenreByAverageOfNumberOfVueComboComedy(0).nbVue
+
+  // Calcul d'un score global
+  var scoreGlobalGenreComboComedyRDD = noteGenreComboComedyRDD.map(genre => {
+    (genre.genre,
+      genre.nbAnime.toFloat / meilleurNombreAnimeComboComedy * 10 +
+        genre.nbVue.toFloat / meilleurNombreVueMoyenComboComedy * 10 +
+        genre.scoreMoyen.toFloat)
+  })
+
+  val meilleurScoreGlobalComboRDD = scoreGlobalGenreComboComedyRDD.sortBy(genre => genre._2, false).take(10);
+  println("Meilleur genre associé au genre Comedy par score global :\n" + meilleurScoreGlobalComboRDD.mkString("\n"));
 }
