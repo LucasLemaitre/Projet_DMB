@@ -1,6 +1,8 @@
 import org.apache.spark.{SparkConf, SparkContext}
 
 import scala.Console.println
+import scala.collection.mutable
+import scala.math._
 
 object anime_stats extends App {
   val sparkConf = new SparkConf().setAppName("graphXTP").setMaster("local[1]")
@@ -77,10 +79,89 @@ object anime_stats extends App {
 
 
 
+  /* On regarde l'impact du nombre d'épisodes sur le score. */
+  val nb_ep_rdd = caract_rdd_clean.groupBy(row => max(200,str_to_int(row(col_episodes))))
+
+  // array_nbEp_addedScores est un tableau de couples de flottant (nombre d'animes, score cumulé des animés) ;
+  // a(0) contiendra un tel couple pour les animés d'entre 0 et 6 épisodes ;
+  // a(1) contiendra un tel couple pour les animés d'entre 7 et 15 épisodes ;
+  // a(2) contiendra un tel couple pour les animés d'entre 16 et 28 épisodes ;
+  // a(3) contiendra un tel couple pour les animés d'entre 29 et 60 épisodes ;
+  // a(4) contiendra un tel couple pour les animés de plus de 60 épisodes.
+  var array_nbEp_addedScores = new Array[Array[Float]](5)
+  for (i <- array_nbEp_addedScores.indices) {
+    array_nbEp_addedScores(i) = new Array[Float](2)
+    array_nbEp_addedScores(i)(0) = 0
+    array_nbEp_addedScores(i)(1) = 0
+  }
+
+  def seqOp = (accu: Array[Array[Float]], row: Array[String]) => {
+    if(str_to_float(row(col_score)) != 0) { //Si le score est 0, cela signifie que personne n'a voté ; on ne retient donc pas l'animé.
+      var i = -1
+      val nb_ep = str_to_int(row(col_episodes))
+      if (nb_ep < 7) i = 0
+      else if (nb_ep < 16) i = 1
+      else if (nb_ep < 29) i = 2
+      else if (nb_ep < 61) i = 3
+      else i = 4
+      accu(i)(0) += 1
+      accu(i)(1) += str_to_float(row(col_score))
+    }
+    accu
+  }
+
+  def combOp = (accu1:Array[Array[Float]], accu2:Array[Array[Float]]) => {
+    for (i <- accu1.indices) {
+      accu1(i)(0) += accu2(i)(0)
+      accu1(i)(1) += accu2(i)(1)
+    }
+    accu1
+  }
+
+  array_nbEp_addedScores = caract_rdd_clean.aggregate(array_nbEp_addedScores)(seqOp,combOp)
+
+  // J'aurais aimé afficher un graphe, mais je n'arrive pas à importer les dépendances nécessaires.
+  // À la place, on affiche quelques lignes.
+  for (i<-array_nbEp_addedScores.indices) println("nombre d'animés : " + array_nbEp_addedScores(i)(0) + " | score moyen : " + array_nbEp_addedScores(i)(1)/array_nbEp_addedScores(i)(0))
 
 
-  // This function takes for an anime an array A st A(i) is the amount of people who put a score of (i+1) for this anime.
-  // It returns the median score.
+
+  /*  On regarde l'impact de la source sur le score.  */
+  val dict_source = new mutable.HashMap[String,Array[Float]]()  //Dictionnaire qui contiendra pour chaque source un couple (nombre d'animés, score cumulé des animés)
+  caract_rdd_clean.foreach(row => {
+    if (str_to_float(row(col_score)) != 0){
+      if (!dict_source.contains(row(col_source))) {
+        val new_value = new Array[Float](2)
+        new_value(0) = 0
+        new_value(1) = 0
+        dict_source.put(row(col_source), new_value) //Couple (nombre d'animés, score cumulé)
+      }
+      val v = dict_source.getOrElse(row(col_source), null)
+      v(0) += 1
+      v(1) += str_to_float(row(col_score))
+    }
+  })
+
+  for (s<-dict_source.keys){
+    val v = dict_source.getOrElse(s, null)
+    println(s + " : " + v(0) + " animés | score moyen : " + v(1)/v(0))
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+  /*  This function takes for an anime an array A st A(i) is the amount of people who put a score of (i+1) for this anime.
+      It returns the median score.
+  */
   def med(amounts: Array[Float]): Int = {
     val half_amount = amounts.sum / 2
 
@@ -124,6 +205,15 @@ object anime_stats extends App {
     }
     catch {
       case e:NumberFormatException => 0
+    }
+  }
+
+  def str_to_int(s: String): Int = {
+    try {
+      return s.toInt
+    }
+    catch {
+      case e: NumberFormatException => 0
     }
   }
 }
